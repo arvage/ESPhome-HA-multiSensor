@@ -1,6 +1,5 @@
-substitutions: #substitute your own values in this section
+substitutions: # your own values in this section
   weather_entity: weather.ecobee_thermostat # entity from Home Assistant 
-  remote_temp_sensor: sensor.server_room_temp # entity from Home Assistant
   esp_board: "esp32dev"
   display_platform: "ssd1306_i2c"  
   display_model: "SSD1306 128x64"
@@ -13,6 +12,8 @@ substitutions: #substitute your own values in this section
   onboard_LED_pin: "2"
   mlx_address: "0x5A"
   touch_pin1: "GPIO15"
+
+  log_level: "DEBUG"
 ##################################################################
 # set device name in ESPhome
 esphome:
@@ -33,9 +34,9 @@ esp32:
   framework:
     type: arduino
 
-# Enable logging
+# log enabler & level
 logger:
-  level: DEBUG
+  level: $log_level
 
 wifi:
   ssid: !secret wifi_ssid
@@ -44,15 +45,16 @@ wifi:
   id: wlan
   on_connect: 
     then: 
-      - light.turn_off:
-          id: wifi_led
+      # change wifi led status to solid after successful connection
       - light.turn_on:
           id: wifi_led
+          effect: none
+      # wait for a delay then switch to weather page
       - delay: 60s
-      - display.page.show_next: oled_display
+      - display.page.show: page2
       - component.update: oled_display
 
-  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  # Enable fallback hotspot (captive portal) in case wifi connection fails. the default is 1 minute
   ap:
     ssid: !secret fallback_ssid
     password: !secret fallback_pass
@@ -65,15 +67,18 @@ web_server:
     username: !secret esp_user
     password: !secret esp_password
 
+# enabling touch component
 esp32_touch:
   setup_mode: false
 
 output:
+  # set wifi status led pin
   - platform: gpio
     pin: $onboard_LED_pin
     id: led_wifi
 
 light:
+  # defining wifi status led light switch and flashing effects
   - platform: binary
     id: wifi_led
     output: led_wifi
@@ -93,6 +98,7 @@ light:
             - state: false
               duration: 200ms
 
+# to use clock on the display
 time:
   - platform: homeassistant
     id: esptime
@@ -100,6 +106,8 @@ time:
 binary_sensor:
   - platform: status
     name: "Display Status"
+
+  # setting up touch pin to act like a switch. this can be replaced with a physical switch 
   - platform: esp32_touch
     name: "Touch"
     pin: $touch_pin1
@@ -108,12 +116,13 @@ binary_sensor:
       then:
         - display.page.show_next: oled_display
         - component.update: oled_display
-
+    # setup long press action
     on_click: 
       min_length: 10000ms
       max_length: 15000ms
       then:
         - switch.turn_on: Restart
+        
 switch:
   - platform: restart
     name: "Restart"
@@ -133,7 +142,7 @@ sensor:
     humidity:
       name: "Humidity"
       id: local_hum
-    update_interval: 30s
+    update_interval: 60s
 
   - platform: mlx90614
     address: $mlx_address
@@ -165,11 +174,6 @@ sensor:
     entity_id: $weather_entity
     attribute: temperature
     internal: true
-
-  - platform: homeassistant
-    id: server_room_temp
-    entity_id: $remote_temp_sensor
-    internal: true
     
   - platform: homeassistant
     id: outside_humidity
@@ -178,9 +182,9 @@ sensor:
     internal: true
   
   - platform: homeassistant
-    id: outside_cloud_coverage
+    id: outside_wind_speed
     entity_id: $weather_entity
-    attribute: cloud_coverage
+    attribute: wind_speed
     internal: true
 
 text_sensor:
@@ -193,6 +197,7 @@ text_sensor:
     name: "TCP/IP Address"
     lambda: 'return {WiFi.localIP().toString().c_str()};'
     id: tcp_ip_address
+    update_interval: 10s
   - platform: wifi_info
     ssid:
       name: Connected SSID
@@ -306,7 +311,7 @@ display:
         
       - id: page2
         lambda: |-
-          /////////////////  Weather Station Page 2//////////////////////
+          /////////////////  Weather Station Page 2 //////////////////////
           
           // Print time in HH:MM format
           it.strftime(0, 0, id(font1), TextAlign::TOP_LEFT, "%H:%M %a", id(esptime).now());
@@ -350,25 +355,25 @@ display:
       
           // Print Outside Humidity
           if (id(outside_humidity).has_state()) {
-            it.printf(it.get_width(), 32, id(font1), TextAlign::TOP_RIGHT, "%7.0f%%", id(outside_humidity).state);
+            it.printf(it.get_width(), 25, id(font1), TextAlign::TOP_RIGHT, "%7.0f%%", id(outside_humidity).state);
           }
       
           // Print Outside Cloud Coverage
-          if (id(outside_cloud_coverage).has_state()) {
-            it.printf(it.get_width(), 48, id(font1), TextAlign::TOP_RIGHT, "%7.0f%%", id(outside_cloud_coverage).state);
+          if (id(outside_wind_speed).has_state()) {
+            it.printf(it.get_width(), 43, id(small_font), TextAlign::TOP_RIGHT, "%7.1f mph", id(outside_wind_speed).state);
           }
 
           ////////////////// End of Weather Station //////////////////////////
       - id: page3
         lambda: |-
-          /////////////////  Ambient Page 2//////////////////////
+          /////////////////  Ambient Page 3 //////////////////////
           
           // Print time in HH:MM format
           it.strftime(0, 0, id(font1), TextAlign::TOP_LEFT, "%H:%M %a", id(esptime).now());
 
           // Print Inside Temperature 
           if (id(local_temp).has_state()) {
-            it.printf(it.get_width(), 0, id(font1), TextAlign::TOP_RIGHT , "%7.0f°", id(local_temp).state);
+            it.printf(it.get_width(), 0, id(font1), TextAlign::TOP_RIGHT, "%7.0f°", id(local_temp).state);
           }
 
           // Print seperator line
@@ -376,11 +381,12 @@ display:
 
           // Print Ambient
           if (id(mlx_ambient).has_state()) {
-            it.printf(0, 20, id(large_font), "Ambient: %7.0f°", id(mlx_ambient).state);
+            it.printf(0, 20, id(large_font), TextAlign::TOP_LEFT, "Ambient", id(mlx_ambient).state);
+            it.printf(it.get_width(), 20, id(large_font), TextAlign::TOP_RIGHT, "%7.0f°", id(mlx_ambient).state);
           }
 
           // Print Object
           if (id(mlx_object).has_state()) {
-            it.printf(0, 40, id(large_font), "Object:     %7.0f°", id(mlx_object).state);
+            it.printf(0, 40, id(large_font), TextAlign::TOP_LEFT, "Object", id(mlx_object).state);
+            it.printf(it.get_width(), 40, id(large_font), TextAlign::TOP_RIGHT, "%7.0f°", id(mlx_object).state);
           }
-
