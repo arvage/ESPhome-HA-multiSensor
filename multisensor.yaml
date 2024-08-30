@@ -1,17 +1,30 @@
 substitutions: # your own values in this section
+  # WEATHER
   weather_entity: weather.ecobee_thermostat # entity from Home Assistant 
+  
+  # BOARD
   esp_board: "esp32dev"
+  
+  # DISPLAY
   display_platform: "ssd1306_i2c"  
   display_model: "SSD1306 128x64"
-  display_address: "0x3C"
-  display_reset_pin: "GPIO0"
-  display_sda_pin: "GPIO21"
-  display_scl_pin: "GPIO22"
+  
+  # SENSOR
   dht_model: AUTO_DETECT
+  
+  # PINS
   dht_pin: "GPIO4"
-  onboard_LED_pin: "2"
-  mlx_address: "0x5A"
+  sda_pin: "GPIO21"
+  scl_pin: "GPIO22"
+  reset_pin: "GPIO0"
   touch_pin1: "GPIO15"
+  onboard_LED_pin: "2"
+  
+  # I2C 
+  display_i2c_address: "0x3C"
+  mlx_i2c_address: "0x5A"
+  ens160_i2c_address: "0x53"
+  bme680_i2c_address: "0x77"
 
   log_level: "DEBUG"
 ##################################################################
@@ -116,6 +129,10 @@ binary_sensor:
       then:
         - display.page.show_next: oled_display
         - component.update: oled_display
+        - delay: 60s
+        - display.page.show: page2
+        - component.update: oled_display
+
     # setup long press action
     on_click: 
       min_length: 10000ms
@@ -134,31 +151,58 @@ sensor:
     id: local_temp_sensor
     pin: $dht_pin
     temperature:
-      name: "Temperature"
+      name: "DHT22 Temperature"
       id: local_temp
       filters:
         - lambda: return x * (9.0/5.0) + 32.0;
       unit_of_measurement: "°F"
     humidity:
-      name: "Humidity"
+      name: "DHT22 Humidity"
       id: local_hum
     update_interval: 60s
 
   - platform: mlx90614
-    address: $mlx_address
+    address: $mlx_i2c_address
     ambient:
-      name: Ambient
+      name: "MLX90614 Ambient"
       id: mlx_ambient
       filters:
         - lambda: return x * (9.0/5.0) + 32.0;
       unit_of_measurement: "°F"
     object:
-      name: Object
+      name: "MLX90614 Object"
       id: mlx_object
       filters:
         - lambda: return x * (9.0/5.0) + 32.0;
       unit_of_measurement: "°F"
     update_interval: 5s
+
+  - platform: ens160_i2c
+    eco2:
+      name: "ENS160 eCO2"
+    tvoc:
+      name: "ENS160 Total Volatile Organic Compounds"
+    aqi:
+      id: ens160_air_quality_index
+      name: "ENS160 Air Quality Index"
+    update_interval: 60s
+    address: $ens160_i2c_address
+    compensation:
+      temperature: local_temp
+      humidity: local_hum
+  
+  - platform: bme680
+    temperature:
+      name: "BME680 Temperature"
+      oversampling: 16x
+    pressure:
+      name: "BME680 Pressure"
+    humidity:
+      name: "BME680 Humidity"
+    gas_resistance:
+      name: "BME680 Gas Resistance"
+    address: $bme680_i2c_address
+    update_interval: 60s
 
   - platform: wifi_signal # Reports the WiFi signal strength in %
     name: "WiFi Signal Percent"
@@ -263,15 +307,15 @@ font:
       - "\U000F092B" # No-wifi
     
 i2c:
-  sda: $display_sda_pin
-  scl: $display_scl_pin
+  sda: $sda_pin
+  scl: $scl_pin
   scan: true
 
 display:
   - platform: $display_platform
     model: $display_model
-    reset_pin: $display_reset_pin
-    address: $display_address
+    reset_pin: $reset_pin
+    address: $display_i2c_address
     id: oled_display
     pages:
       - id: page1
@@ -367,6 +411,58 @@ display:
       - id: page3
         lambda: |-
           /////////////////  Ambient Page 3 //////////////////////
+          
+          // Print time in HH:MM format
+          it.strftime(0, 0, id(font1), TextAlign::TOP_LEFT, "%H:%M %a", id(esptime).now());
+
+          // Print Inside Temperature 
+          if (id(local_temp).has_state()) {
+            it.printf(it.get_width(), 0, id(font1), TextAlign::TOP_RIGHT, "%7.0f°", id(local_temp).state);
+          }
+
+          // Print seperator line
+          it.line(0, 20, it.get_width(), 20);
+
+          // Print Ambient
+          if (id(mlx_ambient).has_state()) {
+            it.printf(0, 20, id(large_font), TextAlign::TOP_LEFT, "Ambient", id(mlx_ambient).state);
+            it.printf(it.get_width(), 20, id(large_font), TextAlign::TOP_RIGHT, "%7.0f°", id(mlx_ambient).state);
+          }
+
+          // Print Object
+          if (id(mlx_object).has_state()) {
+            it.printf(0, 40, id(large_font), TextAlign::TOP_LEFT, "Object", id(mlx_object).state);
+            it.printf(it.get_width(), 40, id(large_font), TextAlign::TOP_RIGHT, "%7.0f°", id(mlx_object).state);
+          }
+      - id: page4
+        lambda: |-
+          /////////////////  ENS Page 5 //////////////////////
+          
+          // Print time in HH:MM format
+          it.strftime(0, 0, id(font1), TextAlign::TOP_LEFT, "%H:%M %a", id(esptime).now());
+
+          // Print Inside Temperature 
+          if (id(local_temp).has_state()) {
+            it.printf(it.get_width(), 0, id(font1), TextAlign::TOP_RIGHT, "%7.0f°", id(local_temp).state);
+          }
+
+          // Print seperator line
+          it.line(0, 20, it.get_width(), 20);
+
+          // Print Ambient
+          if (id(mlx_ambient).has_state()) {
+            it.printf(0, 20, id(large_font), TextAlign::TOP_LEFT, "Ambient", id(mlx_ambient).state);
+            it.printf(it.get_width(), 20, id(large_font), TextAlign::TOP_RIGHT, "%7.0f°", id(mlx_ambient).state);
+          }
+
+          // Print Object
+          if (id(mlx_object).has_state()) {
+            it.printf(0, 40, id(large_font), TextAlign::TOP_LEFT, "Object", id(mlx_object).state);
+            it.printf(it.get_width(), 40, id(large_font), TextAlign::TOP_RIGHT, "%7.0f°", id(mlx_object).state);
+          }
+      - id: page5
+        lambda: |-
+          /////////////////  BME Page 5 //////////////////////
           
           // Print time in HH:MM format
           it.strftime(0, 0, id(font1), TextAlign::TOP_LEFT, "%H:%M %a", id(esptime).now());
