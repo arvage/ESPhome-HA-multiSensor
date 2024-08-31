@@ -8,7 +8,7 @@ substitutions: # your own values in this section
   # DISPLAY
   display_platform: "ssd1306_i2c"  
   display_model: "SSD1306 128x64"
-  default_page: "page5"
+  default_page: "ens_page"
   
   # SENSOR
   dht_model: AUTO_DETECT
@@ -186,7 +186,7 @@ sensor:
       name: "ENS160 eCO2"
       id: ens_eco2
     tvoc:
-      name: "ENS160 Total Volatile Organic Compounds"
+      name: "ENS160 TVOC"
       id: ens_tvoc
     aqi:
       id: ens160_air_quality_index
@@ -278,10 +278,6 @@ text_sensor:
     mac_address:
       name: Wifi Mac Address
       id: mac
-  - platform: template
-    id: hostname
-    lambda: 'return {App.get_name().c_str()};'
-
 
 color:
   - id: red
@@ -351,12 +347,12 @@ display:
     address: $display_i2c_address
     id: oled_display
     pages:
-      - id: page1
+      - id: info_page
         lambda: |-
           //////////////////////// Info Page 1/////////////////////////////
           
           // Print device name
-          it.printf(0, 0, id(font1), TextAlign::TOP_LEFT, "%s", strupr((char*) App.get_name().c_str()));
+          it.printf(0, 0, id(font1), TextAlign::TOP_LEFT, "%s", App.get_name().c_str());
 
           // Print wifi signal
           it.print(110, 0, id(wifi_font), wifi_icon(id(wifi_signal_pct).state));
@@ -387,7 +383,7 @@ display:
 
           ////////////////////////End of Multi Sensor ///////////////////////////
         
-      - id: page2
+      - id: weather_page
         lambda: |-
           /////////////////  Weather Station Page 2 //////////////////////
           
@@ -442,7 +438,7 @@ display:
           }
 
           ////////////////// End of Weather Station //////////////////////////
-      - id: page3
+      - id: mlx_page
         lambda: |-
           /////////////////  Ambient Page 3 //////////////////////
           
@@ -465,7 +461,7 @@ display:
             it.printf(0, 40, id(large_font), TextAlign::TOP_LEFT, "Object", id(mlx_object).state);
             it.printf(it.get_width(), 40, id(large_font), TextAlign::TOP_RIGHT, "%7.0f°", id(mlx_object).state);
           }
-      - id: page4
+      - id: bme_page
         lambda: |-
           /////////////////  BME Page 4 //////////////////////
           
@@ -502,7 +498,7 @@ display:
             it.printf(it.get_width(), 50, id(smallest_font), TextAlign::TOP_RIGHT, "%7.0f", id(bme_resistance).state);
           }
       
-      - id: page5
+      - id: ens_page
         lambda: |-
           /////////////////  ENS Page 5 //////////////////////
           
