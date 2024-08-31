@@ -8,6 +8,7 @@ substitutions: # your own values in this section
   # DISPLAY
   display_platform: "ssd1306_i2c"  
   display_model: "SSD1306 128x64"
+  default_page: "page5"
   
   # SENSOR
   dht_model: AUTO_DETECT
@@ -52,8 +53,11 @@ logger:
   level: $log_level
 
 wifi:
-  ssid: !secret wifi_ssid
-  password: !secret wifi_password
+  networks:
+  - ssid: !secret wifi_ssid
+    password: !secret wifi_password
+  - ssid: !secret backup_wifi_ssid
+    password: !secret backup_wifi_pass
   enable_on_boot: True
   id: wlan
   on_connect: 
@@ -64,7 +68,7 @@ wifi:
           effect: none
       # wait for a delay then switch to weather page
       - delay: 60s
-      - display.page.show: page2
+      - display.page.show: $default_page
       - component.update: oled_display
 
   # Enable fallback hotspot (captive portal) in case wifi connection fails. the default is 1 minute
@@ -130,7 +134,7 @@ binary_sensor:
         - display.page.show_next: oled_display
         - component.update: oled_display
         - delay: 60s
-        - display.page.show: page2
+        - display.page.show: $default_page
         - component.update: oled_display
 
     # setup long press action
@@ -180,27 +184,49 @@ sensor:
   - platform: ens160_i2c
     eco2:
       name: "ENS160 eCO2"
+      id: ens_eco2
     tvoc:
       name: "ENS160 Total Volatile Organic Compounds"
+      id: ens_tvoc
     aqi:
       id: ens160_air_quality_index
       name: "ENS160 Air Quality Index"
     update_interval: 60s
     address: $ens160_i2c_address
     compensation:
-      temperature: local_temp
-      humidity: local_hum
+      temperature: bme_temp
+      humidity: bme_hum
   
+  - platform: aht10
+    variant: AHT20
+    temperature:
+      name: "AHT20 Temperature"
+      id: aht_temp
+      filters:
+        - lambda: return x * (9.0/5.0) + 32.0;
+      unit_of_measurement: "°F"
+    humidity:
+      name: "AHT20 Humidity"
+      id: aht_hum
+    update_interval: 60s
+
   - platform: bme680
     temperature:
       name: "BME680 Temperature"
+      id: bme_temp
       oversampling: 16x
+      filters:
+        - lambda: return x * (9.0/5.0) + 32.0;
+      unit_of_measurement: "°F"
     pressure:
       name: "BME680 Pressure"
+      id: bme_pressure
     humidity:
       name: "BME680 Humidity"
+      id: bme_hum
     gas_resistance:
       name: "BME680 Gas Resistance"
+      id: bme_resistance
     address: $bme680_i2c_address
     update_interval: 60s
 
@@ -230,6 +256,12 @@ sensor:
     entity_id: $weather_entity
     attribute: wind_speed
     internal: true
+  
+  - platform: uptime
+    type: timestamp
+    name: Uptime Sensor
+    id: uptime_timer
+
 
 text_sensor:
   - platform: homeassistant
@@ -249,6 +281,10 @@ text_sensor:
     mac_address:
       name: Wifi Mac Address
       id: mac
+  - platform: template
+    id: hostname
+    lambda: 'return {App.get_name().c_str()};'
+
 
 color:
   - id: red
@@ -320,13 +356,14 @@ display:
     pages:
       - id: page1
         lambda: |-
-          //////////////////////// Multi Sensor Page 1/////////////////////////////
-          // Print wifi signal
-          it.print(0, 0, id(wifi_font), wifi_icon(id(wifi_signal_pct).state));
-      
+          //////////////////////// Info Page 1/////////////////////////////
+          
           // Print device name
-          it.printf(25, 0, id(font1), TextAlign::TOP_LEFT, App.get_name().c_str());
+          it.printf(0, 0, id(font1), TextAlign::TOP_LEFT, "%s", strupr((char*) App.get_name().c_str()));
 
+          // Print wifi signal
+          it.print(110, 0, id(wifi_font), wifi_icon(id(wifi_signal_pct).state));
+      
           // Print seperator line
           it.line(0, 20, it.get_width(), 20);
 
@@ -402,9 +439,9 @@ display:
             it.printf(it.get_width(), 25, id(font1), TextAlign::TOP_RIGHT, "%7.0f%%", id(outside_humidity).state);
           }
       
-          // Print Outside Cloud Coverage
+          // Print Outside Wind Speed
           if (id(outside_wind_speed).has_state()) {
-            it.printf(it.get_width(), 43, id(small_font), TextAlign::TOP_RIGHT, "%7.1f mph", id(outside_wind_speed).state);
+            it.printf(it.get_width(), 43, id(smallest_font), TextAlign::TOP_RIGHT, "%7.1f mph", id(outside_wind_speed).state);
           }
 
           ////////////////// End of Weather Station //////////////////////////
@@ -413,12 +450,9 @@ display:
           /////////////////  Ambient Page 3 //////////////////////
           
           // Print time in HH:MM format
-          it.strftime(0, 0, id(font1), TextAlign::TOP_LEFT, "%H:%M %a", id(esptime).now());
+          it.printf(0, 0, id(font1), TextAlign::TOP_LEFT, "%s", "MLX90614");
 
-          // Print Inside Temperature 
-          if (id(local_temp).has_state()) {
-            it.printf(it.get_width(), 0, id(font1), TextAlign::TOP_RIGHT, "%7.0f°", id(local_temp).state);
-          }
+          it.print(110, 0, id(wifi_font), TextAlign::TOP_LEFT, wifi_icon(id(wifi_signal_pct).state));
 
           // Print seperator line
           it.line(0, 20, it.get_width(), 20);
@@ -436,53 +470,80 @@ display:
           }
       - id: page4
         lambda: |-
-          /////////////////  ENS Page 5 //////////////////////
+          /////////////////  BME Page 4 //////////////////////
           
-          // Print time in HH:MM format
-          it.strftime(0, 0, id(font1), TextAlign::TOP_LEFT, "%H:%M %a", id(esptime).now());
+          // Print BME
+          it.printf(0, 0, id(font1), TextAlign::TOP_LEFT, "%s", "BME680");
 
-          // Print Inside Temperature 
-          if (id(local_temp).has_state()) {
-            it.printf(it.get_width(), 0, id(font1), TextAlign::TOP_RIGHT, "%7.0f°", id(local_temp).state);
-          }
+          it.print(110, 0, id(wifi_font), TextAlign::TOP_LEFT, wifi_icon(id(wifi_signal_pct).state));
+
 
           // Print seperator line
           it.line(0, 20, it.get_width(), 20);
 
-          // Print Ambient
-          if (id(mlx_ambient).has_state()) {
-            it.printf(0, 20, id(large_font), TextAlign::TOP_LEFT, "Ambient", id(mlx_ambient).state);
-            it.printf(it.get_width(), 20, id(large_font), TextAlign::TOP_RIGHT, "%7.0f°", id(mlx_ambient).state);
+          // Print BME Temperature
+          if (id(bme_temp).has_state()) {
+            it.printf(0, 20, id(smallest_font), TextAlign::TOP_LEFT, "BME Temp", id(bme_temp).state);
+            it.printf(it.get_width(), 20, id(smallest_font), TextAlign::TOP_RIGHT, "%7.0f°", id(bme_temp).state);
           }
 
-          // Print Object
-          if (id(mlx_object).has_state()) {
-            it.printf(0, 40, id(large_font), TextAlign::TOP_LEFT, "Object", id(mlx_object).state);
-            it.printf(it.get_width(), 40, id(large_font), TextAlign::TOP_RIGHT, "%7.0f°", id(mlx_object).state);
+          // Print BME Humidity
+          if (id(bme_hum).has_state()) {
+            it.printf(0, 30, id(smallest_font), TextAlign::TOP_LEFT, "Humidity", id(bme_hum).state);
+            it.printf(it.get_width(), 30, id(smallest_font), TextAlign::TOP_RIGHT, "%7.0f%%", id(bme_hum).state);
           }
+
+          // Print BME Pressure
+          if (id(bme_pressure).has_state()) {
+            it.printf(0, 40, id(smallest_font), TextAlign::TOP_LEFT, "Pressure", id(bme_pressure).state);
+            it.printf(it.get_width(), 40, id(smallest_font), TextAlign::TOP_RIGHT, "%7.0f", id(bme_pressure).state);
+          }
+
+          // Print BME Resistance
+          if (id(bme_resistance).has_state()) {
+            it.printf(0, 50, id(smallest_font), TextAlign::TOP_LEFT, "Resistance", id(bme_resistance).state);
+            it.printf(it.get_width(), 50, id(smallest_font), TextAlign::TOP_RIGHT, "%7.0f", id(bme_resistance).state);
+          }
+      
       - id: page5
         lambda: |-
-          /////////////////  BME Page 5 //////////////////////
+          /////////////////  ENS Page 5 //////////////////////
           
-          // Print time in HH:MM format
-          it.strftime(0, 0, id(font1), TextAlign::TOP_LEFT, "%H:%M %a", id(esptime).now());
+          // Print ENS
+          it.printf(0, 0, id(font1), TextAlign::TOP_LEFT, "%s", "ENS160");
 
-          // Print Inside Temperature 
-          if (id(local_temp).has_state()) {
-            it.printf(it.get_width(), 0, id(font1), TextAlign::TOP_RIGHT, "%7.0f°", id(local_temp).state);
-          }
+          it.print(110, 0, id(wifi_font), TextAlign::TOP_LEFT, wifi_icon(id(wifi_signal_pct).state));
+
 
           // Print seperator line
           it.line(0, 20, it.get_width(), 20);
 
-          // Print Ambient
-          if (id(mlx_ambient).has_state()) {
-            it.printf(0, 20, id(large_font), TextAlign::TOP_LEFT, "Ambient", id(mlx_ambient).state);
-            it.printf(it.get_width(), 20, id(large_font), TextAlign::TOP_RIGHT, "%7.0f°", id(mlx_ambient).state);
-          }
+          // Print eCO2
+          //if (id(ens_eco2).has_state()) {
+            it.printf(0, 20, id(smallest_font), TextAlign::TOP_LEFT, "eCO2", id(ens_eco2).state);
+            it.printf(it.get_width(), 20, id(smallest_font), TextAlign::TOP_RIGHT, "%7.0f", id(ens_eco2).state);
+          //}
 
-          // Print Object
-          if (id(mlx_object).has_state()) {
-            it.printf(0, 40, id(large_font), TextAlign::TOP_LEFT, "Object", id(mlx_object).state);
-            it.printf(it.get_width(), 40, id(large_font), TextAlign::TOP_RIGHT, "%7.0f°", id(mlx_object).state);
-          }
+          // Print Air Quality
+          //if (id(ens160_air_quality_index).has_state()) {
+            it.printf(0, 30, id(smallest_font), TextAlign::TOP_LEFT, "AIR Quality", id(ens160_air_quality_index).state);
+            it.printf(it.get_width(), 30, id(smallest_font), TextAlign::TOP_RIGHT, "%7.0f", id(ens160_air_quality_index).state);
+          //}
+
+          // Print tvoc
+          //if (id(ens_tvoc).has_state()) {
+            it.printf(0, 40, id(smallest_font), TextAlign::TOP_LEFT, "TVOC", id(ens_tvoc).state);
+            it.printf(it.get_width(), 40, id(smallest_font), TextAlign::TOP_RIGHT, "%7.0f", id(ens_tvoc).state);
+          //}
+
+          // Print AHT Temperature
+          //if (id(aht_temp).has_state()) {
+            it.printf(0, 50, id(smallest_font), TextAlign::TOP_LEFT, "AHT Temp", id(aht_temp).state);
+            it.printf(it.get_width(), 50, id(smallest_font), TextAlign::TOP_RIGHT, "%7.0f°", id(aht_temp).state);
+          //}
+
+          // Print AHT Humidity
+          //if (id(aht_hum).has_state()) {
+          //  it.printf(0, 50, id(smallest_font), TextAlign::TOP_LEFT, "AHT Hum", id(aht_hum).state);
+          //  it.printf(it.get_width(), 50, id(smallest_font), TextAlign::TOP_RIGHT, "%7.0f%%", id(aht_hum).state);
+          //}
