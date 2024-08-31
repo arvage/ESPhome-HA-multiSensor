@@ -194,17 +194,14 @@ sensor:
     update_interval: 60s
     address: $ens160_i2c_address
     compensation:
-      temperature: bme_temp
-      humidity: bme_hum
+      temperature: aht_temp
+      humidity: aht_hum
   
   - platform: aht10
     variant: AHT20
-    temperature:
+    temperature: 
       name: "AHT20 Temperature"
       id: aht_temp
-      filters:
-        - lambda: return x * (9.0/5.0) + 32.0;
-      unit_of_measurement: "°F"
     humidity:
       name: "AHT20 Humidity"
       id: aht_hum
@@ -259,7 +256,7 @@ sensor:
   
   - platform: uptime
     type: timestamp
-    name: Uptime Sensor
+    name: Last Boot
     id: uptime_timer
 
 
@@ -524,16 +521,16 @@ display:
             it.printf(it.get_width(), 20, id(smallest_font), TextAlign::TOP_RIGHT, "%7.0f", id(ens_eco2).state);
           //}
 
-          // Print Air Quality
-          //if (id(ens160_air_quality_index).has_state()) {
-            it.printf(0, 30, id(smallest_font), TextAlign::TOP_LEFT, "AIR Quality", id(ens160_air_quality_index).state);
-            it.printf(it.get_width(), 30, id(smallest_font), TextAlign::TOP_RIGHT, "%7.0f", id(ens160_air_quality_index).state);
-          //}
-
           // Print tvoc
           //if (id(ens_tvoc).has_state()) {
-            it.printf(0, 40, id(smallest_font), TextAlign::TOP_LEFT, "TVOC", id(ens_tvoc).state);
-            it.printf(it.get_width(), 40, id(smallest_font), TextAlign::TOP_RIGHT, "%7.0f", id(ens_tvoc).state);
+            it.printf(0, 30, id(smallest_font), TextAlign::TOP_LEFT, "TVOC", id(ens_tvoc).state);
+            it.printf(it.get_width(), 30, id(smallest_font), TextAlign::TOP_RIGHT, "%7.0f", id(ens_tvoc).state);
+          //}
+
+          // Print Air Quality
+          //if (id(ens160_air_quality_index).has_state()) {
+            it.printf(0, 40, id(smallest_font), TextAlign::TOP_LEFT, "AIR Quality", id(ens160_air_quality_index).state);
+            it.printf(it.get_width(), 40, id(smallest_font), TextAlign::TOP_RIGHT, "%7.0f", id(ens160_air_quality_index).state);
           //}
 
           // Print AHT Temperature
