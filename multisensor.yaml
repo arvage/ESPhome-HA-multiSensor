@@ -8,15 +8,16 @@ substitutions: # your own values in this section
   # DISPLAY
   display_platform: "ssd1306_i2c"  
   display_model: "SSD1306 128x64"
-  default_page: "ens_page"
+  default_page: "weather_page"
   
   # SENSOR
   dht_model: AUTO_DETECT
   
   # PINS
+  i2c_sda_pin: "GPIO21"
+  i2c_scl_pin: "GPIO22"
+  ic2_frequency: "100khz"
   dht_pin: "GPIO4"
-  sda_pin: "GPIO21"
-  scl_pin: "GPIO22"
   reset_pin: "GPIO0"
   touch_pin1: "GPIO15"
   onboard_LED_pin: "2"
@@ -47,6 +48,13 @@ esp32:
   board: $esp_board
   framework:
     type: arduino
+
+i2c:
+  sda: $i2c_sda_pin
+  scl: $i2c_scl_pin
+  frequency: $ic2_frequency
+  scan: true
+
 
 # log enabler & level
 logger:
@@ -335,11 +343,6 @@ font:
       - "\U000F0920" # Low-wifi
       - "\U000F092B" # No-wifi
     
-i2c:
-  sda: $sda_pin
-  scl: $scl_pin
-  scan: true
-
 display:
   - platform: $display_platform
     model: $display_model
@@ -445,6 +448,7 @@ display:
           // Print time in HH:MM format
           it.printf(0, 0, id(font1), TextAlign::TOP_LEFT, "%s", "MLX90614");
 
+          // Print wifi icon
           it.print(110, 0, id(wifi_font), TextAlign::TOP_LEFT, wifi_icon(id(wifi_signal_pct).state));
 
           // Print seperator line
@@ -468,8 +472,8 @@ display:
           // Print BME
           it.printf(0, 0, id(font1), TextAlign::TOP_LEFT, "%s", "BME680");
 
+          // Print wifi icon
           it.print(110, 0, id(wifi_font), TextAlign::TOP_LEFT, wifi_icon(id(wifi_signal_pct).state));
-
 
           // Print seperator line
           it.line(0, 20, it.get_width(), 20);
@@ -505,35 +509,38 @@ display:
           // Print ENS
           it.printf(0, 0, id(font1), TextAlign::TOP_LEFT, "%s", "ENS160");
 
+          // Print wifi icon
           it.print(110, 0, id(wifi_font), TextAlign::TOP_LEFT, wifi_icon(id(wifi_signal_pct).state));
-
 
           // Print seperator line
           it.line(0, 20, it.get_width(), 20);
 
           // Print eCO2
-          //if (id(ens_eco2).has_state()) {
+          if (id(ens_eco2).has_state()) {
             it.printf(0, 20, id(smallest_font), TextAlign::TOP_LEFT, "eCO2", id(ens_eco2).state);
             it.printf(it.get_width(), 20, id(smallest_font), TextAlign::TOP_RIGHT, "%7.0f", id(ens_eco2).state);
-          //}
+          }
 
           // Print tvoc
-          //if (id(ens_tvoc).has_state()) {
+          if (id(ens_tvoc).has_state()) {
             it.printf(0, 30, id(smallest_font), TextAlign::TOP_LEFT, "TVOC", id(ens_tvoc).state);
             it.printf(it.get_width(), 30, id(smallest_font), TextAlign::TOP_RIGHT, "%7.0f", id(ens_tvoc).state);
-          //}
+          }
+          else {
+            it.printf(0, 32, id(font1), id(red), TextAlign::TOP_LEFT, "Warming Up...");
+          }
 
           // Print Air Quality
-          //if (id(ens160_air_quality_index).has_state()) {
+          if (id(ens160_air_quality_index).has_state()) {
             it.printf(0, 40, id(smallest_font), TextAlign::TOP_LEFT, "AIR Quality", id(ens160_air_quality_index).state);
             it.printf(it.get_width(), 40, id(smallest_font), TextAlign::TOP_RIGHT, "%7.0f", id(ens160_air_quality_index).state);
-          //}
+          }
 
           // Print AHT Temperature
-          //if (id(aht_temp).has_state()) {
+          if (id(aht_temp).has_state()) {
             it.printf(0, 50, id(smallest_font), TextAlign::TOP_LEFT, "AHT Temp", id(aht_temp).state);
             it.printf(it.get_width(), 50, id(smallest_font), TextAlign::TOP_RIGHT, "%7.0f°", id(aht_temp).state);
-          //}
+          }
 
           // Print AHT Humidity
           //if (id(aht_hum).has_state()) {
